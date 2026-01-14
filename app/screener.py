@@ -3,19 +3,19 @@ import pandas as pd
 
 def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = None, debug: bool = False) -> pd.DataFrame:
     """
-    Build a prop screener with realistic confidence levels, streak count, and season hit count.
+    Build a prop screener with confidence, streak, and season hit count.
 
     Parameters:
-    - df: DataFrame with player stats (must have 'player' or similar column, prop numeric columns)
+    - df: DataFrame with player stats (must have 'player' or similar column, numeric prop columns)
     - line_map: dict of prop_type -> line value
-    - upcoming_team_map: optional dict of player -> opponent team (for head-to-head adjustment)
-    - debug: if True, prints all intermediate calculations for each player
+    - upcoming_team_map: optional dict of player -> opponent team (for H2H adjustment)
+    - debug: if True, prints intermediate calculations
 
     Returns:
     - DataFrame with player, prop_type, line, avg_last_10, hit_rate_last_10, streak_count, season_hit_count, confidence
     """
 
-    # 1️⃣ Detect player column automatically
+    # Detect player column
     possible_player_cols = ['player', 'PLAYER_NAME', 'Player', 'NAME']
     player_col = next((c for c in possible_player_cols if c in df.columns), None)
     if not player_col:
@@ -23,10 +23,10 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
 
     records = []
 
-    # 2️⃣ Iterate over players
+    # Iterate over players
     for player, pdf in df.groupby(player_col):
         for prop, line in line_map.items():
-            # Map prop names to column names
+            # Map prop names to columns
             col_map = {
                 "PTS": "pts",
                 "REB": "reb",
@@ -34,39 +34,47 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                 "3PM": "3pm"
             }
             col_name = col_map.get(prop, prop)
-
             if col_name not in pdf.columns:
                 continue
 
             # Ensure numeric values
             pdf[col_name] = pd.to_numeric(pdf[col_name], errors='coerce')
-            last_10 = pdf[col_name].tail(10).dropna()
-            full_season = pdf[col_name].dropna()
 
-            # 3️⃣ Safely calculate averages
+            # Convert to Python lists for calculations
+            last_10 = pdf[col_name].tail(10).dropna().tolist()
+            full_season = pdf[col_name].dropna().tolist()
+
+            # Average and hit rate last 10
             if len(last_10) == 0:
                 avg_last_10 = 0
                 hit_rate_last_10 = 0
             else:
-                avg_last_10 = last_10.mean()
-                hit_rate_last_10 = (last_10 >= line).mean()
+                avg_last_10 = sum(last_10) / len(last_10)
+                hit_rate_last_10 = sum(1 for x in last_10 if x >= line) / len(last_10)
 
-            # 4️⃣ Home/Away adjustment (optional)
+            # Home/Away adjustment
             home_away_factor = 1.0
-            if 'Home' in pdf.columns:
-                last_10_home = last_10[pdf['Home'].tail(len(last_10)) == True]
+            if 'Home' in pdf.columns and len(last_10) > 0:
+                # Match last_10 indices with Home column
+                last_10_home = [
+                    val for idx, val in zip(pdf[col_name].tail(10).index, last_10)
+                    if pdf['Home'].iloc[idx]
+                ]
                 if len(last_10_home) >= 1:
-                    home_away_factor = last_10_home.mean() / max(avg_last_10, 1)
+                    home_away_factor = sum(last_10_home) / max(avg_last_10, 1)
 
-            # 5️⃣ Head-to-Head adjustment (optional)
+            # H2H adjustment
             h2h_factor = 1.0
-            if upcoming_team_map and player in upcoming_team_map and 'Opp' in pdf.columns:
+            if upcoming_team_map and player in upcoming_team_map and 'Opp' in pdf.columns and len(last_10) > 0:
                 opponent = upcoming_team_map[player]
-                h2h_games = last_10[pdf['Opp'].tail(len(last_10)) == opponent]
-                if len(h2h_games) >= 1:
-                    h2h_factor = h2h_games.mean() / max(avg_last_10, 1)
+                last_10_opp = [
+                    val for idx, val in zip(pdf[col_name].tail(10).index, last_10)
+                    if pdf['Opp'].iloc[idx] == opponent
+                ]
+                if len(last_10_opp) >= 1:
+                    h2h_factor = sum(last_10_opp) / max(avg_last_10, 1)
 
-            # 6️⃣ Weighted confidence calculation
+            # Weighted confidence
             weighted_hit_rate = (
                 hit_rate_last_10 * 0.6 +
                 (avg_last_10 / max(line, 1)) * 0.2 +
@@ -76,7 +84,7 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
             weighted_hit_rate = min(max(weighted_hit_rate, 0), 1)
             confidence = round(weighted_hit_rate * 100)
 
-            # 7️⃣ Streak count: consecutive games hitting the line (from most recent backwards)
+            # Streak count: consecutive games hitting the line (from most recent backwards)
             streak_count = 0
             for val in reversed(full_season):
                 if val >= line:
@@ -84,10 +92,10 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                 else:
                     break
 
-            # 8️⃣ Season hit count: total games hitting the line
-            season_hit_count = (full_season >= line).sum()
+            # Season hit count
+            season_hit_count = sum(1 for val in full_season if val >= line)
 
-            # 9️⃣ Debug output
+            # Debug output
             if debug:
                 print(f"Player: {player}")
                 print(f"Prop: {prop}, Line: {line}")
@@ -100,7 +108,7 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                 print(f"Season hit count: {season_hit_count}")
                 print("-" * 40)
 
-            # 10️⃣ Store results
+            # Store results
             records.append({
                 "player": player,
                 "prop_type": prop,
