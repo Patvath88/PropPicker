@@ -54,11 +54,16 @@ if df.empty:
 def get_player_info(player_name):
     """Return headshot URL and Basketball-Reference URL"""
     try:
-        search_name = player_name.replace(" ", "-")
-        player_url = f"https://www.basketball-reference.com/players/{search_name[0].lower()}/{search_name[:5].lower()}01.html"
+        # Basketball-Reference uses first letter of last name, then first 5 letters of last + first 2 letters of first
+        names = player_name.split()
+        if len(names) < 2:
+            return None, None
+        first, last = names[0], names[-1]
+        key = f"{last[:5].lower()}{first[:2].lower()}01"
+        player_url = f"https://www.basketball-reference.com/players/{last[0].lower()}/{key}.html"
         r = requests.get(player_url)
         if r.status_code != 200:
-            return None, None
+            return None, player_url
         soup = BeautifulSoup(r.text, 'html.parser')
         img_tag = soup.find("img", {"itemprop": "image"})
         headshot_url = img_tag['src'] if img_tag else None
@@ -70,16 +75,16 @@ def get_player_info(player_name):
 with st.sidebar:
     st.header("Metrics Key")
     st.markdown("""
-    **Minutes Played Factor (MP Factor):** Percentage of average minutes played over last 10 games compared to 30 MPG.  
-    **Efficiency Factor:** Player's efficiency based on shooting (FG%) over last 10 games.  
-    **Home/Away Factor:** Performance adjustment based on whether games were home or away.  
-    **H2H Factor:** Performance adjustment vs upcoming opponent based on last 10 matchups.  
-    **Confidence:** Weighted probability of hitting the line, combining all factors, streaks, averages, and hit rate.
+    **Minutes Played Factor (MP Factor):** % of average minutes played over last 10 games vs 30 MPG.  
+    **Efficiency Factor:** Shooting efficiency (FG%) over last 10 games.  
+    **Home/Away Factor:** Adjustment based on whether recent games were home or away.  
+    **H2H Factor:** Adjustment based on last 10 games vs upcoming opponent.  
+    **Confidence:** Weighted probability of hitting the line based on all factors, streaks, and averages.
     """)
 
 # ===== UI =====
 st.title("🏀 NBA Prop Screener")
-st.markdown("Analyze players and trends with **predicted stats** and **confidence ratings**.")
+st.markdown("Analyze players and trends with **predicted stats**, **confidence ratings**, and **AI insights**.")
 
 prop = st.selectbox("Prop Type", ["PTS","REB","AST","3PM"])
 line = st.number_input("Prop Line", value=20.5)
@@ -106,7 +111,7 @@ def confidence_color(conf):
     else:
         return "#F44336"  # Red
 
-# ===== Display Premium Cards =====
+# ===== Display Player Cards =====
 for idx in range(0, len(filtered), 3):
     cols = st.columns(3, gap="small")
     for i, col in enumerate(cols):
@@ -117,8 +122,8 @@ for idx in range(0, len(filtered), 3):
         conf_color = confidence_color(player['confidence'])
 
         # Generate AI description
-        ai_desc = (f"{player['player']} has averaged {player['avg_last_10']:.1f} {prop.lower()} over "
-                   f"the last 10 games while playing {player['mp_factor']*30:.0f} MPG. "
+        ai_desc = (f"{player['player']} has averaged {player['avg_last_10']:.1f} {prop.lower()} "
+                   f"over the last 10 games while playing {player['mp_factor']*30:.0f} MPG. "
                    f"Against their upcoming opponent, performance metrics suggest high likelihood to hit the line.")
 
         card_html = f"""
@@ -136,16 +141,20 @@ for idx in range(0, len(filtered), 3):
             {'</a>' if bref_url else ''}
             <h3 style="margin:5px 0">{player['player']}</h3>
             <div style="font-size:14px; margin-bottom:5px">
-            <b>{prop} Line:</b> {player['line']}<br>
-            <b>Predicted {prop}:</b> {player['prediction']}<br>
-            <b>Confidence:</b> <span style="color:{conf_color};">{player['confidence']}%</span><br>
-            <b>Minutes Played Factor:</b> {player['mp_factor']*100:.0f}%<br>
-            <b>Efficiency Factor:</b> {player['eff_factor']*100:.0f}%<br>
-            <b>Home/Away Factor:</b> {player['home_away_factor']*100:.0f}%<br>
-            <b>H2H Factor:</b> {player['h2h_factor']*100:.0f}%
+                <b>{prop} Line:</b> {player['line']}<br>
+                <b>Predicted {prop}:</b> {player['prediction']}<br>
+                <b>Confidence:</b> <span style="color:{conf_color};">{player['confidence']}%</span><br>
+                <b>Minutes Played Factor:</b> {player['mp_factor']*100:.0f}%<br>
+                <b>Efficiency Factor:</b> {player['eff_factor']*100:.0f}%<br>
+                <b>Home/Away Factor:</b> {player['home_away_factor']*100:.0f}%<br>
+                <b>H2H Factor:</b> {player['h2h_factor']*100:.0f}%
+            </div>
+            <!-- Confidence bar -->
+            <div style="background:#ddd; border-radius:5px; height:8px; width:100%; margin-bottom:6px;">
+                <div style="width:{player['confidence']}%; background:{conf_color}; height:100%; border-radius:5px;"></div>
             </div>
             <div style="font-size:13px; color:#555; margin-top:6px; border-top:1px solid #ddd; padding-top:4px;">
-            {ai_desc}
+                {ai_desc}
             </div>
         </div>
         """
