@@ -4,7 +4,6 @@ import streamlit as st
 import pandas as pd
 import time
 import requests
-from io import StringIO
 
 # ===== Add app folder to path for imports =====
 ROOT_DIR = Path(__file__).resolve().parent
@@ -28,7 +27,6 @@ st.write("CSV exists?", CSV_FILE.exists())
 
 # ===== Helper: download CSV if missing or outdated =====
 def update_csv_if_needed():
-    """Check if CSV exists or is older than 24h and download if needed"""
     need_download = False
     if not CSV_FILE.exists():
         need_download = True
@@ -63,14 +61,16 @@ def load_data():
     try:
         df = pd.read_csv(CSV_FILE)
     except pd.errors.ParserError:
-        # Show first few bytes if parsing fails
         with open(CSV_FILE, "r", encoding="utf-8") as f:
             sample = f.read(500)
         st.error(f"Failed to parse CSV. First 500 chars:\n{sample}")
         st.stop()
     
+    # Strip whitespace and lowercase columns
+    df.columns = df.columns.str.strip().str.lower()
+
     # Ensure numeric columns
-    for col in ['PTS','REB','AST','3PM','MP','FG%']:
+    for col in ['pts','reb','ast','3pm','mp','fg%']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
     return df
