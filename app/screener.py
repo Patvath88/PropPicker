@@ -24,14 +24,21 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
     player_col = 'player'
     records = []
 
+    # Map all common props
+    prop_column_map = {
+        "PTS": ["pts", "p", "points"],
+        "REB": ["reb", "trb", "rebounds"],
+        "AST": ["ast", "assists"],
+        "3PM": ["3pm", "3p", "3p made"]
+    }
+
     for player, pdf in df.groupby(player_col):
         for prop, line in line_map.items():
-            # Map prop to CSV column (lowercase)
-            col_map = {"PTS":"pts","REB":"reb","AST":"ast","3PM":"3pm"}
-            col_name = col_map.get(prop, prop.lower())
-            if col_name not in pdf.columns:
+            possible_cols = prop_column_map.get(prop, [prop.lower()])
+            col_name = next((c for c in possible_cols if c in pdf.columns), None)
+            if col_name is None:
                 if debug:
-                    print(f"Skipping {prop} for {player}, missing column {col_name}")
+                    print(f"Skipping {prop} for {player}, no matching column in CSV")
                 continue
 
             # Ensure numeric
@@ -117,4 +124,9 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                 "prediction": prediction
             })
 
-    return pd.DataFrame(records)
+    df_out = pd.DataFrame(records)
+
+    if df_out.empty and debug:
+        print("Warning: Screener produced no rows. Check CSV column names and line_map.")
+
+    return df_out
