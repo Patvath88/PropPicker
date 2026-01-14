@@ -1,43 +1,45 @@
-# main.py (renamed from app.py)
+# main.py
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
 import streamlit as st
 import pandas as pd
 import subprocess
 import time
 
-# Relative import to fix circular issue
-from .screener import build_screener
+# ===== Add app folder to path for imports =====
+ROOT_DIR = Path(__file__).resolve().parent
+sys.path.append(str(ROOT_DIR))
+
+from screener import build_screener
 
 # ===== Paths =====
-ROOT_DIR = Path(__file__).resolve().parents[1]
 CSV_FILE = ROOT_DIR / "data" / "nba_player_game_logs.csv"
 CSV_FILE.parent.mkdir(exist_ok=True)
-SCRAPER_FILE = ROOT_DIR / "scripts" / "scrape_nba_game_logs.py"
+SCRAPER_FILE = ROOT_DIR.parent / "scripts" / "scrape_nba_game_logs.py"
 
 # ===== Streamlit config =====
 st.set_page_config(layout="wide", page_title="NBA Prop Screener", page_icon="🏀")
 
 # ===== Scraper helper =====
-def ensure_game_logs():
+def update_csv_if_needed():
+    """Check if CSV exists or is older than 24h and run scraper if needed"""
     need_scrape = False
     if not CSV_FILE.exists():
         need_scrape = True
-        st.info("Game logs not found. Scraping now, this may take several minutes...")
+        st.info("Game logs not found. Scraping now...")
     else:
         modified_time = CSV_FILE.stat().st_mtime
-        if (time.time() - modified_time) > 86400:
+        if (time.time() - modified_time) > 86400:  # older than 24h
             need_scrape = True
-            st.info("Game logs are outdated. Scraping now, this may take several minutes...")
+            st.info("Game logs are outdated. Updating now...")
 
     if need_scrape:
         try:
             with st.spinner("Downloading NBA game logs..."):
-                subprocess.run(["python", str(SCRAPER_FILE)], check=True)
-            st.success("Game logs downloaded successfully!")
+                subprocess.run([sys.executable, str(SCRAPER_FILE)], check=True)
+            st.success("Game logs updated successfully!")
         except subprocess.CalledProcessError:
-            st.error("Scraper failed! Please try running it manually.")
+            st.error("Scraper failed! Please run manually.")
 
 # ===== Load CSV =====
 @st.cache_data(ttl=86400)
@@ -52,8 +54,8 @@ def load_data():
             df[col] = pd.to_numeric(df[col], errors='coerce')
     return df
 
-# ===== Ensure CSV exists =====
-ensure_game_logs()
+# ===== Ensure CSV is up-to-date =====
+update_csv_if_needed()
 
 df = load_data()
 if df.empty:
@@ -67,7 +69,7 @@ prop = st.selectbox("Prop Type", ["PTS","REB","AST","3PM"])
 line = st.number_input("Prop Line", value=20.5)
 min_conf = st.slider("Min Confidence (%)", 0, 100, 60)
 line_map = {prop: line}
-upcoming_team_map = {}  # can fill later if needed
+upcoming_team_map = {}  # optional H2H mapping
 
 # Build screener
 screener = build_screener(df, line_map, upcoming_team_map=upcoming_team_map)
@@ -75,7 +77,7 @@ screener = build_screener(df, line_map, upcoming_team_map=upcoming_team_map)
 # Filter results
 filtered = screener[(screener["prop_type"]==prop) & (screener["confidence"]>=min_conf)].sort_values("confidence",ascending=False)
 
-# ===== Display Premium Player Cards =====
+# ===== Display Player Cards =====
 st.markdown(f"### Players with {prop} ≥ {line} and confidence ≥ {min_conf}%")
 
 if filtered.empty:
