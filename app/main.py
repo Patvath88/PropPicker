@@ -21,10 +21,6 @@ CSV_URL = "https://raw.githubusercontent.com/Patvath88/PropPicker/main/data/nba_
 # ===== Streamlit config =====
 st.set_page_config(layout="wide", page_title="NBA Prop Screener", page_icon="🏀")
 
-# ===== Debugging paths =====
-st.write("CSV path:", CSV_FILE)
-st.write("CSV exists?", CSV_FILE.exists())
-
 # ===== Helper: download CSV if missing or outdated =====
 def update_csv_if_needed():
     need_download = False
@@ -110,6 +106,7 @@ else:
             with col:
                 st.markdown(f"### {player['player']}")
                 st.metric(label=f"{prop} Line", value=f"{player['line']}")
+                st.metric(label=f"Predicted {prop}", value=f"{player['prediction']}")
                 st.metric(label="Confidence (%)", value=player['confidence'])
                 st.markdown(f"**Avg Last 10 Games:** {player['avg_last_10']:.1f}")
                 st.markdown(f"**Hit Rate Last 10:** {player['hit_rate_last_10']:.0%}")
