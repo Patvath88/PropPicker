@@ -41,16 +41,16 @@ df = load_data()
 if df.empty:
     st.stop()
 
-# Example upcoming opponents for demonstration
+# Example upcoming opponents
 upcoming_team_map = {
     "Donovan Mitchell": "MIL",
     "Luka Doncic": "PHI",
 }
 
-# Example defensive ratings per team per position
+# Example defensive ratings
 def_ratings = {
-    "MIL": {"PG": 0.95, "SG": 1.02, "SF": 0.99, "PF": 1.03, "C": 0.98},
-    "PHI": {"PG": 1.01, "SG": 1.00, "SF": 0.97, "PF": 1.05, "C": 0.99},
+    "MIL": {"overall":0.98,"PG":0.95,"SG":1.02,"SF":0.99,"PF":1.03,"C":0.98},
+    "PHI": {"overall":0.99,"PG":1.01,"SG":1.00,"SF":0.97,"PF":1.05,"C":0.99},
 }
 
 def get_player_headshot(player_name):
@@ -79,7 +79,6 @@ prop = st.selectbox("Prop Type", ["PTS","REB","AST","3PM"])
 line = st.number_input("Prop Line", value=20.5)
 min_conf = st.slider("Min Confidence (%)", 0, 100, 60)
 
-# Build screener
 line_map = {prop: line}
 screener = build_screener(df, line_map, upcoming_team_map=upcoming_team_map, def_ratings=def_ratings)
 filtered = screener[(screener["prop_type"]==prop) & (screener["confidence"]>=min_conf)].sort_values("confidence",ascending=False)
@@ -111,9 +110,14 @@ for idx in range(0, len(filtered), 3):
         player = filtered.iloc[idx+i]
         headshot_url = get_player_headshot(player['player'])
         conf_color = confidence_color(player['confidence'])
-        ai_desc = (f"{player['player']} has averaged {player['avg_last_10']:.1f} {prop.lower()} "
-                   f"over the last 10 games while playing {player['mp_factor']*30:.0f} MPG. "
-                   f"Against {player['upcoming_opp']}, performance metrics suggest high likelihood to hit the line.")
+        ai_desc = (
+            f"{player['player']} has averaged {player['avg_last_10']:.1f} {prop.lower()} "
+            f"over the last 10 games while playing {player['mp_factor']*30:.0f} MPG. "
+            f"Next up: {player['upcoming_opp']}. "
+            f"The team has an overall defensive rating of {player['opp_def_overall']*100:.0f}% "
+            f"and a positional defense rating of {player['opp_factor']*100:.0f}% against {player['position']}. "
+            f"Based on recent form and matchup metrics, they have a high likelihood to hit their line."
+        )
 
         card_html = f"""
         <div style="border:2px solid #ccc; border-radius:12px; padding:12px; margin-bottom:10px;
@@ -126,19 +130,4 @@ for idx in range(0, len(filtered), 3):
                 <b>{prop} Line:</b> {player['line']}<br>
                 <b>Predicted {prop}:</b> {player['prediction']}<br>
                 <b>Confidence:</b> <span style="color:{conf_color};">{player['confidence']}%</span><br>
-                <b>Minutes Played Factor:</b> {player['mp_factor']*100:.0f}%<br>
-                <b>Efficiency Factor:</b> {player['eff_factor']*100:.0f}%<br>
-                <b>Home/Away Factor:</b> {player['home_away_factor']*100:.0f}%<br>
-                <b>H2H Factor:</b> {player['h2h_factor']*100:.0f}%<br>
-                <b>Opponent Defense Factor:</b> {player['opp_factor']*100:.0f}%<br>
-                <b>Upcoming Opponent:</b> {player['upcoming_opp'] if player['upcoming_opp'] else 'N/A'}
-            </div>
-            <div style="background:#ddd; border-radius:5px; height:8px; width:100%; margin-bottom:6px;">
-                <div style="width:{player['confidence']}%; background: linear-gradient(to right,#4CAF50,#FFEB3B,#F44336); height:100%; border-radius:5px;"></div>
-            </div>
-            <div style="font-size:13px; color:#333; margin-top:6px; border-top:1px solid #ddd; padding-top:4px;">
-                {ai_desc}
-            </div>
-        </div>
-        """
-        col.markdown(card_html, unsafe_allow_html=True)
+                <b>Minutes Played
