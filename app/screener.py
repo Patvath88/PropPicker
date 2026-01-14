@@ -3,7 +3,7 @@ import pandas as pd
 
 def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = None, debug: bool = False) -> pd.DataFrame:
     """
-    Build a prop screener with realistic confidence levels and optional debug output.
+    Build a prop screener with realistic confidence levels, streak count, and season hit count.
 
     Parameters:
     - df: DataFrame with player stats (must have 'player' or similar column, prop numeric columns)
@@ -12,7 +12,7 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
     - debug: if True, prints all intermediate calculations for each player
 
     Returns:
-    - DataFrame with player, prop_type, line, avg_last_10, hit_rate_last_10, confidence
+    - DataFrame with player, prop_type, line, avg_last_10, hit_rate_last_10, streak_count, season_hit_count, confidence
     """
 
     # 1️⃣ Detect player column automatically
@@ -41,6 +41,7 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
             # Ensure numeric values
             pdf[col_name] = pd.to_numeric(pdf[col_name], errors='coerce')
             last_10 = pdf[col_name].tail(10).dropna()
+            full_season = pdf[col_name].dropna()
 
             # 3️⃣ Safely calculate averages
             if len(last_10) == 0:
@@ -72,10 +73,21 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                 home_away_factor * 0.1 +
                 h2h_factor * 0.1
             )
-            weighted_hit_rate = min(max(weighted_hit_rate, 0), 1)  # clamp between 0 and 1
+            weighted_hit_rate = min(max(weighted_hit_rate, 0), 1)
             confidence = round(weighted_hit_rate * 100)
 
-            # 7️⃣ Debug output
+            # 7️⃣ Streak count: consecutive games hitting the line (from most recent backwards)
+            streak_count = 0
+            for val in reversed(full_season):
+                if val >= line:
+                    streak_count += 1
+                else:
+                    break
+
+            # 8️⃣ Season hit count: total games hitting the line
+            season_hit_count = (full_season >= line).sum()
+
+            # 9️⃣ Debug output
             if debug:
                 print(f"Player: {player}")
                 print(f"Prop: {prop}, Line: {line}")
@@ -84,15 +96,19 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                 print(f"Home/Away factor: {home_away_factor:.2f}")
                 print(f"H2H factor: {h2h_factor:.2f}")
                 print(f"Weighted confidence: {confidence}%")
+                print(f"Streak count: {streak_count}")
+                print(f"Season hit count: {season_hit_count}")
                 print("-" * 40)
 
-            # 8️⃣ Store results
+            # 10️⃣ Store results
             records.append({
                 "player": player,
                 "prop_type": prop,
                 "line": line,
                 "avg_last_10": avg_last_10,
                 "hit_rate_last_10": hit_rate_last_10,
+                "streak_count": streak_count,
+                "season_hit_count": season_hit_count,
                 "confidence": confidence
             })
 
