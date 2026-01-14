@@ -1,6 +1,5 @@
 # screener.py
 import pandas as pd
-import numpy as np
 
 def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = None, debug: bool = False) -> pd.DataFrame:
     """
@@ -25,22 +24,30 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
             if col_name not in pdf.columns:
                 continue
 
-            # Numeric
+            # Numeric conversion
             pdf[col_name] = pd.to_numeric(pdf[col_name], errors='coerce')
             last_10 = pdf[col_name].tail(10).dropna().tolist()
-            full_season = pdf[col_name].dropna()
+            full_season = pdf[col_name].dropna().tolist()
 
             # Core metrics
             avg_last_10 = sum(last_10)/len(last_10) if last_10 else 0
             hit_rate_last_10 = sum(1 for x in last_10 if x >= line)/len(last_10) if last_10 else 0
 
             # --- Streak calculations ---
-            hits = full_season >= line
+            hits = [1 if x >= line else 0 for x in full_season]
+
             # Longest consecutive streak
-            streak_count = hits.groupby((hits != hits.shift()).cumsum()).sum().max()
-            streak_count = int(streak_count) if not pd.isna(streak_count) else 0
-            # Total games hitting the line
-            season_hit_count = int(hits.sum())
+            max_streak = 0
+            current_streak = 0
+            for h in hits:
+                if h == 1:
+                    current_streak += 1
+                    max_streak = max(max_streak, current_streak)
+                else:
+                    current_streak = 0
+
+            streak_count = max_streak  # longest consecutive games hitting the line
+            season_hit_count = sum(hits)  # total games hitting the line
 
             # Minutes adjustment
             mp_factor = 1.0
@@ -84,7 +91,7 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                 eff_factor * 0.1 +
                 home_away_factor * 0.1 +
                 h2h_factor * 0.1 +
-                min(streak_count/5,1.0) * 0.05  # streak factor
+                min(streak_count/5,1.0) * 0.05  # streak factor capped
             )
             weighted_conf = min(max(weighted_conf,0),1)
             confidence = round(weighted_conf*100)
