@@ -4,7 +4,6 @@ import streamlit as st
 import pandas as pd
 import time
 import requests
-from bs4 import BeautifulSoup
 
 ROOT_DIR = Path(__file__).resolve().parent
 sys.path.append(str(ROOT_DIR))
@@ -49,27 +48,16 @@ df = load_data()
 if df.empty:
     st.stop()
 
-# ===== Player Headshots & BRef URL =====
-@st.cache_data(ttl=86400)
-def get_player_info(player_name):
-    """Return headshot URL and Basketball-Reference URL"""
-    try:
-        # Basketball-Reference uses first letter of last name, then first 5 letters of last + first 2 letters of first
-        names = player_name.split()
-        if len(names) < 2:
-            return None, None
-        first, last = names[0], names[-1]
-        key = f"{last[:5].lower()}{first[:2].lower()}01"
-        player_url = f"https://www.basketball-reference.com/players/{last[0].lower()}/{key}.html"
-        r = requests.get(player_url)
-        if r.status_code != 200:
-            return None, player_url
-        soup = BeautifulSoup(r.text, 'html.parser')
-        img_tag = soup.find("img", {"itemprop": "image"})
-        headshot_url = img_tag['src'] if img_tag else None
-        return headshot_url, player_url
-    except:
-        return None, None
+# ===== Player Headshots =====
+def get_player_headshot(player_name):
+    """Return the Basketball-Reference headshot URL based on player name."""
+    names = player_name.split()
+    if len(names) < 2:
+        return None
+    first, last = names[0], names[-1]
+    player_id = f"{last[:5].lower()}{first[:2].lower()}01"
+    headshot_url = f"https://www.basketball-reference.com/req/202301121/images/players/{player_id}.jpg"
+    return headshot_url
 
 # ===== Sidebar Key =====
 with st.sidebar:
@@ -118,7 +106,7 @@ for idx in range(0, len(filtered), 3):
         if idx + i >= len(filtered):
             break
         player = filtered.iloc[idx+i]
-        headshot_url, bref_url = get_player_info(player['player'])
+        headshot_url = get_player_headshot(player['player'])
         conf_color = confidence_color(player['confidence'])
 
         # Generate AI description
@@ -136,9 +124,7 @@ for idx in range(0, len(filtered), 3):
             background-color:#f9f9f9;
             box-shadow: 3px 3px 8px rgba(0,0,0,0.15);
             ">
-            {'<a href="'+bref_url+'" target="_blank">' if bref_url else ''}
             {'<img src="'+headshot_url+'" width="100" style="border-radius:50%; margin-bottom:10px;">' if headshot_url else ''}
-            {'</a>' if bref_url else ''}
             <h3 style="margin:5px 0">{player['player']}</h3>
             <div style="font-size:14px; margin-bottom:5px">
                 <b>{prop} Line:</b> {player['line']}<br>
