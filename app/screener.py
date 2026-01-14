@@ -1,4 +1,3 @@
-# screener.py
 import pandas as pd
 
 def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = None, debug: bool = False) -> pd.DataFrame:
@@ -11,12 +10,11 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
     player_col = 'player'
     records = []
 
-    # Map prop type to CSV column
-    col_map = {"PTS":"PTS","REB":"REB","TRB":"REB","AST":"AST","3P":"3PM","3PM":"3PM"}
-
     for player, pdf in df.groupby(player_col):
         for prop, line in line_map.items():
-            col_name = col_map.get(prop, prop)
+            # Map prop to CSV column
+            col_map = {"PTS":"pts","REB":"reb","AST":"ast","3PM":"3pm"}
+            col_name = col_map.get(prop, prop.lower())
             if col_name not in pdf.columns:
                 continue
 
@@ -29,7 +27,7 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
             avg_last_10 = sum(last_10)/len(last_10) if last_10 else 0
             hit_rate_last_10 = sum(1 for x in last_10 if x >= line)/len(last_10) if last_10 else 0
 
-            # Longest streak
+            # --- Longest streak ---
             hits = [1 if x >= line else 0 for x in full_season]
             max_streak = 0
             current_streak = 0
@@ -39,35 +37,36 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                     max_streak = max(max_streak, current_streak)
                 else:
                     current_streak = 0
+
             streak_count = max_streak
             season_hit_count = sum(hits)
 
             # Minutes factor
             mp_factor = 1.0
-            if 'MP' in pdf.columns:
-                mp_last_10 = pd.to_numeric(pdf['MP'].tail(10).dropna(), errors='coerce')
+            if 'mp' in pdf.columns:
+                mp_last_10 = pd.to_numeric(pdf['mp'].tail(10).dropna(), errors='coerce')
                 if len(mp_last_10):
                     mp_factor = min(sum(mp_last_10)/len(mp_last_10)/30,1.0)
 
-            # Efficiency factor
+            # Efficiency factor (FG% approximation)
             eff_factor = 1.0
-            if 'FG%' in pdf.columns:
-                fg_pct = pd.to_numeric(pdf['FG%'].tail(10).dropna(), errors='coerce')
+            if 'fg%' in pdf.columns:
+                fg_pct = pd.to_numeric(pdf['fg%'].tail(10).dropna(), errors='coerce')
                 if len(fg_pct):
-                    eff_factor = min(fg_pct.mean()/0.45,1.0)
+                    eff_factor *= min(fg_pct.mean()/0.45,1.0)
 
             # Home/Away factor
             home_away_factor = 1.0
-            if 'Home' in pdf.columns:
-                last_10_home = [v for idx,v in zip(pdf[col_name].tail(10).index,last_10) if pdf['Home'].iloc[idx]]
+            if 'home' in pdf.columns:
+                last_10_home = [v for idx,v in zip(pdf[col_name].tail(10).index,last_10) if pdf['home'].iloc[idx]]
                 if last_10_home:
                     home_away_factor = sum(last_10_home)/max(avg_last_10,1)
 
             # H2H factor
             h2h_factor = 1.0
-            if upcoming_team_map and player in upcoming_team_map and 'Opp' in pdf.columns:
+            if upcoming_team_map and player in upcoming_team_map and 'opp' in pdf.columns:
                 opp = upcoming_team_map[player]
-                last_10_opp = [v for idx,v in zip(pdf[col_name].tail(10).index,last_10) if pdf['Opp'].iloc[idx]==opp]
+                last_10_opp = [v for idx,v in zip(pdf[col_name].tail(10).index,last_10) if pdf['opp'].iloc[idx]==opp]
                 if last_10_opp:
                     h2h_factor = sum(last_10_opp)/max(avg_last_10,1)
 
