@@ -1,4 +1,3 @@
-# app/screener.py
 import pandas as pd
 
 def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = None, debug: bool = False) -> pd.DataFrame:
@@ -8,19 +7,18 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
     line_map: {"PTS": 25.5} etc
     upcoming_team_map: optional H2H mapping
     """
-
     player_col = 'player'
     records = []
 
+    col_map = {"PTS":"PTS","REB":"REB","TRB":"REB","AST":"AST","3P":"3PM","3PM":"3PM"}
+
     for player, pdf in df.groupby(player_col):
         for prop, line in line_map.items():
-
-            col_map = {"PTS":"PTS","REB":"TRB","AST":"AST","3PM":"3P"}
             col_name = col_map.get(prop, prop)
             if col_name not in pdf.columns:
                 continue
 
-            # Numeric
+            # Numeric conversion
             pdf[col_name] = pd.to_numeric(pdf[col_name], errors='coerce')
             last_10 = pdf[col_name].tail(10).dropna().tolist()
             full_season = pdf[col_name].dropna().tolist()
@@ -29,7 +27,7 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
             avg_last_10 = sum(last_10)/len(last_10) if last_10 else 0
             hit_rate_last_10 = sum(1 for x in last_10 if x >= line)/len(last_10) if last_10 else 0
 
-            # --- Longest streak ---
+            # Longest streak
             hits = [1 if x >= line else 0 for x in full_season]
             max_streak = 0
             current_streak = 0
@@ -39,7 +37,6 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                     max_streak = max(max_streak, current_streak)
                 else:
                     current_streak = 0
-
             streak_count = max_streak
             season_hit_count = sum(hits)
 
@@ -50,12 +47,12 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                 if len(mp_last_10):
                     mp_factor = min(sum(mp_last_10)/len(mp_last_10)/30,1.0)
 
-            # Efficiency factor (simple FG% approximation)
+            # Efficiency factor
             eff_factor = 1.0
             if 'FG%' in pdf.columns:
                 fg_pct = pd.to_numeric(pdf['FG%'].tail(10).dropna(), errors='coerce')
                 if len(fg_pct):
-                    eff_factor *= min(fg_pct.mean()/0.45,1.0)
+                    eff_factor = min(fg_pct.mean()/0.45,1.0)
 
             # Home/Away factor
             home_away_factor = 1.0
