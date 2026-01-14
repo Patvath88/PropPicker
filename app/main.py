@@ -4,6 +4,7 @@ import streamlit as st
 import pandas as pd
 import time
 import requests
+from io import StringIO
 
 # ===== Add app folder to path for imports =====
 ROOT_DIR = Path(__file__).resolve().parent
@@ -15,9 +16,8 @@ from screener import build_screener
 CSV_FILE = ROOT_DIR / "data" / "nba_player_game_logs.csv"
 CSV_FILE.parent.mkdir(exist_ok=True)
 
-# ===== Remote CSV URL =====
-# Replace with your hosted CSV (GitHub raw, S3, etc.)
-CSV_URL = "https://raw.githubusercontent.com/Patvath88/PropPicker/refs/heads/main/data/nba_player_game_logs.csv"
+# ===== Correct GitHub raw CSV URL =====
+CSV_URL = "https://raw.githubusercontent.com/Patvath88/PropPicker/main/data/nba_player_game_logs.csv"
 
 # ===== Streamlit config =====
 st.set_page_config(layout="wide", page_title="NBA Prop Screener", page_icon="🏀")
@@ -44,8 +44,7 @@ def update_csv_if_needed():
             r = requests.get(CSV_URL)
             r.raise_for_status()
             CSV_FILE.parent.mkdir(exist_ok=True)
-            with open(CSV_FILE, "wb") as f:
-                f.write(r.content)
+            CSV_FILE.write_bytes(r.content)
             st.success("Game logs downloaded successfully!")
         except Exception as e:
             st.error(f"Failed to download CSV: {e}")
@@ -61,7 +60,15 @@ if not CSV_FILE.exists():
 # ===== Load CSV =====
 @st.cache_data(ttl=86400)
 def load_data():
-    df = pd.read_csv(CSV_FILE)
+    try:
+        df = pd.read_csv(CSV_FILE)
+    except pd.errors.ParserError:
+        # Show first few bytes if parsing fails
+        with open(CSV_FILE, "r", encoding="utf-8") as f:
+            sample = f.read(500)
+        st.error(f"Failed to parse CSV. First 500 chars:\n{sample}")
+        st.stop()
+    
     # Ensure numeric columns
     for col in ['PTS','REB','AST','3PM','MP','FG%']:
         if col in df.columns:
