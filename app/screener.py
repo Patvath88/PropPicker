@@ -1,5 +1,14 @@
 import pandas as pd
 
+def predict_player_line(last_10, mp_factor=1.0, eff_factor=1.0, home_away_factor=1.0, h2h_factor=1.0):
+    """Return a predicted stat for the next game"""
+    if not last_10:
+        return 0
+    base = sum(last_10)/len(last_10)  # average of last 10 games
+    prediction = base * mp_factor * eff_factor * home_away_factor * h2h_factor
+    return round(prediction, 1)
+
+
 def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = None, debug: bool = False) -> pd.DataFrame:
     """
     Build NBA prop screener from game log data.
@@ -12,7 +21,7 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
 
     for player, pdf in df.groupby(player_col):
         for prop, line in line_map.items():
-            # Map prop to CSV column
+            # Map prop to CSV column (lowercase)
             col_map = {"PTS":"pts","REB":"reb","AST":"ast","3PM":"3pm"}
             col_name = col_map.get(prop, prop.lower())
             if col_name not in pdf.columns:
@@ -27,7 +36,7 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
             avg_last_10 = sum(last_10)/len(last_10) if last_10 else 0
             hit_rate_last_10 = sum(1 for x in last_10 if x >= line)/len(last_10) if last_10 else 0
 
-            # --- Longest streak ---
+            # Longest streak
             hits = [1 if x >= line else 0 for x in full_season]
             max_streak = 0
             current_streak = 0
@@ -37,7 +46,6 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                     max_streak = max(max_streak, current_streak)
                 else:
                     current_streak = 0
-
             streak_count = max_streak
             season_hit_count = sum(hits)
 
@@ -48,7 +56,7 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                 if len(mp_last_10):
                     mp_factor = min(sum(mp_last_10)/len(mp_last_10)/30,1.0)
 
-            # Efficiency factor (FG% approximation)
+            # Efficiency factor
             eff_factor = 1.0
             if 'fg%' in pdf.columns:
                 fg_pct = pd.to_numeric(pdf['fg%'].tail(10).dropna(), errors='coerce')
@@ -83,6 +91,9 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
             weighted_conf = min(max(weighted_conf,0),1)
             confidence = round(weighted_conf*100)
 
+            # Prediction for next game
+            prediction = predict_player_line(last_10, mp_factor, eff_factor, home_away_factor, h2h_factor)
+
             records.append({
                 "player": player,
                 "prop_type": prop,
@@ -95,7 +106,8 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                 "eff_factor": eff_factor,
                 "home_away_factor": home_away_factor,
                 "h2h_factor": h2h_factor,
-                "confidence": confidence
+                "confidence": confidence,
+                "prediction": prediction
             })
 
     return pd.DataFrame(records)
