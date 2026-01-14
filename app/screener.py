@@ -1,14 +1,15 @@
 # screener.py
 import pandas as pd
 
-def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = None) -> pd.DataFrame:
+def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = None, debug: bool = False) -> pd.DataFrame:
     """
-    Build a prop screener with realistic confidence levels.
+    Build a prop screener with realistic confidence levels and optional debug output.
 
     Parameters:
     - df: DataFrame with player stats (must have 'player' or similar column, prop numeric columns)
     - line_map: dict of prop_type -> line value
     - upcoming_team_map: optional dict of player -> opponent team (for head-to-head adjustment)
+    - debug: if True, prints all intermediate calculations for each player
 
     Returns:
     - DataFrame with player, prop_type, line, avg_last_10, hit_rate_last_10, confidence
@@ -56,7 +57,7 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                 if len(last_10_home) >= 1:
                     home_away_factor = last_10_home.mean() / max(avg_last_10, 1)
 
-            # 5️⃣ Head-to-head adjustment (optional)
+            # 5️⃣ Head-to-Head adjustment (optional)
             h2h_factor = 1.0
             if upcoming_team_map and player in upcoming_team_map and 'Opp' in pdf.columns:
                 opponent = upcoming_team_map[player]
@@ -74,7 +75,18 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
             weighted_hit_rate = min(max(weighted_hit_rate, 0), 1)  # clamp between 0 and 1
             confidence = round(weighted_hit_rate * 100)
 
-            # 7️⃣ Store results
+            # 7️⃣ Debug output
+            if debug:
+                print(f"Player: {player}")
+                print(f"Prop: {prop}, Line: {line}")
+                print(f"Hit rate L10: {hit_rate_last_10:.2f}")
+                print(f"Avg last 10 / Line: {avg_last_10 / max(line,1):.2f}")
+                print(f"Home/Away factor: {home_away_factor:.2f}")
+                print(f"H2H factor: {h2h_factor:.2f}")
+                print(f"Weighted confidence: {confidence}%")
+                print("-" * 40)
+
+            # 8️⃣ Store results
             records.append({
                 "player": player,
                 "prop_type": prop,
