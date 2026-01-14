@@ -4,27 +4,54 @@ from pathlib import Path
 from datetime import datetime, timedelta
 import streamlit as st
 import pandas as pd
+import subprocess
+import time
 from app.screener import build_screener
 
 # ===== Paths =====
 ROOT_DIR = Path(__file__).resolve().parents[1]
 CSV_FILE = ROOT_DIR / "data" / "nba_player_game_logs.csv"
 CSV_FILE.parent.mkdir(exist_ok=True)
+SCRAPER_FILE = ROOT_DIR / "scripts" / "scrape_nba_game_logs.py"
 
 # ===== Streamlit config =====
 st.set_page_config(layout="wide", page_title="NBA Prop Screener", page_icon="🏀")
+
+# ===== Scraper helper =====
+def ensure_game_logs():
+    need_scrape = False
+    if not CSV_FILE.exists():
+        need_scrape = True
+        st.info("Game logs not found. Scraping now, this may take several minutes...")
+    else:
+        modified_time = CSV_FILE.stat().st_mtime
+        if (time.time() - modified_time) > 86400:  # older than 24h
+            need_scrape = True
+            st.info("Game logs are outdated. Scraping now, this may take several minutes...")
+
+    if need_scrape:
+        # Run scraper as subprocess
+        try:
+            with st.spinner("Downloading NBA game logs..."):
+                subprocess.run(["python", str(SCRAPER_FILE)], check=True)
+            st.success("Game logs downloaded successfully!")
+        except subprocess.CalledProcessError:
+            st.error("Scraper failed! Please try running it manually.")
 
 # ===== Load CSV =====
 @st.cache_data(ttl=86400)
 def load_data():
     if not CSV_FILE.exists():
-        st.error("Game log CSV not found. Run `scripts/scrape_nba_game_logs.py` first.")
+        st.warning("No game logs found. Please run scraper first.")
         return pd.DataFrame()
     df = pd.read_csv(CSV_FILE)
     for col in ['PTS','TRB','AST','3P','MP']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
     return df
+
+# ===== Ensure CSV exists =====
+ensure_game_logs()
 
 df = load_data()
 if df.empty:
@@ -38,7 +65,6 @@ prop = st.selectbox("Prop Type", ["PTS","REB","AST","3PM"])
 line = st.number_input("Prop Line", value=20.5)
 min_conf = st.slider("Min Confidence (%)", 0, 100, 60)
 line_map = {prop: line}
-
 upcoming_team_map = {}
 
 # Build screener
