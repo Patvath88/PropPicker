@@ -16,8 +16,8 @@ CSV_FILE = ROOT_DIR / "data" / "nba_player_game_logs.csv"
 CSV_FILE.parent.mkdir(exist_ok=True)
 
 # ===== Remote CSV URL =====
-# Replace this with your hosted CSV (GitHub raw, S3, etc.)
-CSV_URL = "https://github.com/Patvath88/PropPicker/blob/main/data/nba_player_game_logs.csv"
+# Replace with your hosted CSV (GitHub raw, S3, etc.)
+CSV_URL = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/app/data/nba_player_game_logs.csv"
 
 # ===== Streamlit config =====
 st.set_page_config(layout="wide", page_title="NBA Prop Screener", page_icon="🏀")
@@ -28,6 +28,7 @@ st.write("CSV exists?", CSV_FILE.exists())
 
 # ===== Helper: download CSV if missing or outdated =====
 def update_csv_if_needed():
+    """Check if CSV exists or is older than 24h and download if needed"""
     need_download = False
     if not CSV_FILE.exists():
         need_download = True
@@ -42,27 +43,30 @@ def update_csv_if_needed():
         try:
             r = requests.get(CSV_URL)
             r.raise_for_status()
+            CSV_FILE.parent.mkdir(exist_ok=True)
             with open(CSV_FILE, "wb") as f:
                 f.write(r.content)
             st.success("Game logs downloaded successfully!")
         except Exception as e:
             st.error(f"Failed to download CSV: {e}")
+            st.stop()  # Stop here if download fails
+
+# ===== Ensure CSV is available =====
+update_csv_if_needed()
+
+if not CSV_FILE.exists():
+    st.error("CSV still not found after download. Check CSV_URL.")
+    st.stop()
 
 # ===== Load CSV =====
 @st.cache_data(ttl=86400)
 def load_data():
-    if not CSV_FILE.exists():
-        st.warning("No game logs found. Please check the CSV URL.")
-        return pd.DataFrame()
     df = pd.read_csv(CSV_FILE)
     # Ensure numeric columns
     for col in ['PTS','REB','AST','3PM','MP','FG%']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
     return df
-
-# ===== Ensure CSV is up-to-date =====
-update_csv_if_needed()
 
 df = load_data()
 if df.empty:
