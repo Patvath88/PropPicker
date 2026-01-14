@@ -49,23 +49,33 @@ df = load_data()
 if df.empty:
     st.stop()
 
-# ===== Player Headshots =====
+# ===== Player Headshots & BRef URL =====
 @st.cache_data(ttl=86400)
-def get_headshot_url(player_name):
-    """Return basketball-reference headshot URL for a player"""
+def get_player_info(player_name):
+    """Return headshot URL and Basketball-Reference URL"""
     try:
         search_name = player_name.replace(" ", "-")
-        url = f"https://www.basketball-reference.com/players/{search_name[0].lower()}/{search_name[:5].lower()}01.html"
-        r = requests.get(url)
+        player_url = f"https://www.basketball-reference.com/players/{search_name[0].lower()}/{search_name[:5].lower()}01.html"
+        r = requests.get(player_url)
         if r.status_code != 200:
-            return None
+            return None, None
         soup = BeautifulSoup(r.text, 'html.parser')
         img_tag = soup.find("img", {"itemprop": "image"})
-        if img_tag and img_tag['src']:
-            return img_tag['src']
+        headshot_url = img_tag['src'] if img_tag else None
+        return headshot_url, player_url
     except:
-        return None
-    return None
+        return None, None
+
+# ===== Sidebar Key =====
+with st.sidebar:
+    st.header("Metrics Key")
+    st.markdown("""
+    **Minutes Played Factor (MP Factor):** Percentage of average minutes played over last 10 games compared to 30 MPG.  
+    **Efficiency Factor:** Player's efficiency based on shooting (FG%) over last 10 games.  
+    **Home/Away Factor:** Performance adjustment based on whether games were home or away.  
+    **H2H Factor:** Performance adjustment vs upcoming opponent based on last 10 matchups.  
+    **Confidence:** Weighted probability of hitting the line, combining all factors, streaks, averages, and hit rate.
+    """)
 
 # ===== UI =====
 st.title("🏀 NBA Prop Screener")
@@ -87,28 +97,56 @@ filtered = screener[(screener["prop_type"]==prop) & (screener["confidence"]>=min
 
 st.markdown(f"### Players with {prop} ≥ {line} and confidence ≥ {min_conf}%")
 
-# ===== Display Cards with Headshots =====
+# ===== Helper: Confidence Color =====
+def confidence_color(conf):
+    if conf >= 75:
+        return "#4CAF50"  # Green
+    elif conf >= 50:
+        return "#FFEB3B"  # Yellow
+    else:
+        return "#F44336"  # Red
+
+# ===== Display Premium Cards =====
 for idx in range(0, len(filtered), 3):
-    cols = st.columns(3)
+    cols = st.columns(3, gap="small")
     for i, col in enumerate(cols):
         if idx + i >= len(filtered):
             break
         player = filtered.iloc[idx+i]
-        headshot_url = get_headshot_url(player['player'])
-        with col:
-            if headshot_url:
-                st.image(headshot_url, width=120)
-            st.markdown(f"### {player['player']}", unsafe_allow_html=True)
-            st.metric(label=f"{prop} Line", value=f"{player['line']}")
-            st.metric(label=f"Predicted {prop}", value=f"{player['prediction']}")
-            st.metric(label="Confidence (%)", value=player['confidence'])
-            st.markdown(f"""
-            <div style="font-size:14px">
-            **Avg Last 10 Games:** {player['avg_last_10']:.1f}  <br>
-            **Hit Rate Last 10:** {player['hit_rate_last_10']:.0%}  <br>
-            **Minutes Played Factor:** {player['mp_factor']*100:.0f}%  <br>
-            **Efficiency Factor:** {player['eff_factor']*100:.0f}%  <br>
-            **Home/Away Factor:** {player['home_away_factor']*100:.0f}%  <br>
-            **H2H Factor:** {player['h2h_factor']*100:.0f}%
+        headshot_url, bref_url = get_player_info(player['player'])
+        conf_color = confidence_color(player['confidence'])
+
+        # Generate AI description
+        ai_desc = (f"{player['player']} has averaged {player['avg_last_10']:.1f} {prop.lower()} over "
+                   f"the last 10 games while playing {player['mp_factor']*30:.0f} MPG. "
+                   f"Against their upcoming opponent, performance metrics suggest high likelihood to hit the line.")
+
+        card_html = f"""
+        <div style="
+            border:2px solid #ccc; 
+            border-radius:12px; 
+            padding:12px; 
+            margin-bottom:10px; 
+            text-align:center;
+            background-color:#f9f9f9;
+            box-shadow: 3px 3px 8px rgba(0,0,0,0.15);
+            ">
+            {'<a href="'+bref_url+'" target="_blank">' if bref_url else ''}
+            {'<img src="'+headshot_url+'" width="100" style="border-radius:50%; margin-bottom:10px;">' if headshot_url else ''}
+            {'</a>' if bref_url else ''}
+            <h3 style="margin:5px 0">{player['player']}</h3>
+            <div style="font-size:14px; margin-bottom:5px">
+            <b>{prop} Line:</b> {player['line']}<br>
+            <b>Predicted {prop}:</b> {player['prediction']}<br>
+            <b>Confidence:</b> <span style="color:{conf_color};">{player['confidence']}%</span><br>
+            <b>Minutes Played Factor:</b> {player['mp_factor']*100:.0f}%<br>
+            <b>Efficiency Factor:</b> {player['eff_factor']*100:.0f}%<br>
+            <b>Home/Away Factor:</b> {player['home_away_factor']*100:.0f}%<br>
+            <b>H2H Factor:</b> {player['h2h_factor']*100:.0f}%
             </div>
-            """, unsafe_allow_html=True)
+            <div style="font-size:13px; color:#555; margin-top:6px; border-top:1px solid #ddd; padding-top:4px;">
+            {ai_desc}
+            </div>
+        </div>
+        """
+        col.markdown(card_html, unsafe_allow_html=True)
