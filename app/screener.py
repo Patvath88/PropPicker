@@ -1,3 +1,4 @@
+# screener.py
 import pandas as pd
 
 def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = None, debug: bool = False) -> pd.DataFrame:
@@ -10,6 +11,7 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
     player_col = 'player'
     records = []
 
+    # Map prop type to CSV column
     col_map = {"PTS":"PTS","REB":"REB","TRB":"REB","AST":"AST","3P":"3PM","3PM":"3PM"}
 
     for player, pdf in df.groupby(player_col):
