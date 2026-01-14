@@ -17,7 +17,7 @@ CSV_FILE.parent.mkdir(exist_ok=True)
 
 # ===== Remote CSV URL =====
 # Replace with your hosted CSV (GitHub raw, S3, etc.)
-CSV_URL = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/app/data/nba_player_game_logs.csv"
+CSV_URL = "https://raw.githubusercontent.com/Patvath88/PropPicker/refs/heads/main/data/nba_player_game_logs.csv"
 
 # ===== Streamlit config =====
 st.set_page_config(layout="wide", page_title="NBA Prop Screener", page_icon="🏀")
