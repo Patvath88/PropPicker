@@ -1,4 +1,4 @@
-# app.py
+# main.py (renamed from app.py)
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -6,7 +6,9 @@ import streamlit as st
 import pandas as pd
 import subprocess
 import time
-from app.screener import build_screener
+
+# Relative import to fix circular issue
+from .screener import build_screener
 
 # ===== Paths =====
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -25,12 +27,11 @@ def ensure_game_logs():
         st.info("Game logs not found. Scraping now, this may take several minutes...")
     else:
         modified_time = CSV_FILE.stat().st_mtime
-        if (time.time() - modified_time) > 86400:  # older than 24h
+        if (time.time() - modified_time) > 86400:
             need_scrape = True
             st.info("Game logs are outdated. Scraping now, this may take several minutes...")
 
     if need_scrape:
-        # Run scraper as subprocess
         try:
             with st.spinner("Downloading NBA game logs..."):
                 subprocess.run(["python", str(SCRAPER_FILE)], check=True)
@@ -45,7 +46,8 @@ def load_data():
         st.warning("No game logs found. Please run scraper first.")
         return pd.DataFrame()
     df = pd.read_csv(CSV_FILE)
-    for col in ['PTS','TRB','AST','3P','MP']:
+    # Ensure numeric columns
+    for col in ['PTS','REB','AST','3PM','MP','FG%']:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors='coerce')
     return df
@@ -65,7 +67,7 @@ prop = st.selectbox("Prop Type", ["PTS","REB","AST","3PM"])
 line = st.number_input("Prop Line", value=20.5)
 min_conf = st.slider("Min Confidence (%)", 0, 100, 60)
 line_map = {prop: line}
-upcoming_team_map = {}
+upcoming_team_map = {}  # can fill later if needed
 
 # Build screener
 screener = build_screener(df, line_map, upcoming_team_map=upcoming_team_map)
