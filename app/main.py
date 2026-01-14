@@ -109,7 +109,6 @@ for idx in range(0, len(filtered), 3):
         headshot_url = get_player_headshot(player['player'])
         conf_color = confidence_color(player['confidence'])
 
-        # Generate AI description
         ai_desc = (f"{player['player']} has averaged {player['avg_last_10']:.1f} {prop.lower()} "
                    f"over the last 10 games while playing {player['mp_factor']*30:.0f} MPG. "
                    f"Against their upcoming opponent, performance metrics suggest high likelihood to hit the line.")
@@ -121,12 +120,16 @@ for idx in range(0, len(filtered), 3):
             padding:12px; 
             margin-bottom:10px; 
             text-align:center;
-            background-color:#f9f9f9;
-            box-shadow: 3px 3px 8px rgba(0,0,0,0.15);
+            background: linear-gradient(145deg, #ffffff, #f2f2f2);
+            color:#111;
+            box-shadow: 3px 3px 15px rgba(0,0,0,0.15);
+            font-family:Arial, sans-serif;
+            transition: transform 0.2s;
             ">
-            {'<img src="'+headshot_url+'" width="100" style="border-radius:50%; margin-bottom:10px;">' if headshot_url else ''}
-            <h3 style="margin:5px 0">{player['player']}</h3>
-            <div style="font-size:14px; margin-bottom:5px">
+            <h3 style="margin:5px 0; font-weight:bold; color:#222;">{player['player']}</h3>
+            {'<img src="'+headshot_url+'" width="100" style="border-radius:50%; margin-bottom:5px;">' if headshot_url else ''}
+            <div style="font-size:14px; font-weight:bold; margin-bottom:10px; color:#555;">{player['team'] if 'team' in player else ''}</div>
+            <div style="font-size:14px; margin-bottom:5px; color:#111;">
                 <b>{prop} Line:</b> {player['line']}<br>
                 <b>Predicted {prop}:</b> {player['prediction']}<br>
                 <b>Confidence:</b> <span style="color:{conf_color};">{player['confidence']}%</span><br>
@@ -135,11 +138,13 @@ for idx in range(0, len(filtered), 3):
                 <b>Home/Away Factor:</b> {player['home_away_factor']*100:.0f}%<br>
                 <b>H2H Factor:</b> {player['h2h_factor']*100:.0f}%
             </div>
-            <!-- Confidence bar -->
+            <!-- Confidence gradient bar -->
             <div style="background:#ddd; border-radius:5px; height:8px; width:100%; margin-bottom:6px;">
-                <div style="width:{player['confidence']}%; background:{conf_color}; height:100%; border-radius:5px;"></div>
+                <div style="width:{player['confidence']}%; 
+                            background: linear-gradient(to right, #4CAF50, #FFEB3B, #F44336); 
+                            height:100%; border-radius:5px;"></div>
             </div>
-            <div style="font-size:13px; color:#555; margin-top:6px; border-top:1px solid #ddd; padding-top:4px;">
+            <div style="font-size:13px; color:#333; margin-top:6px; border-top:1px solid #ddd; padding-top:4px;">
                 {ai_desc}
             </div>
         </div>
