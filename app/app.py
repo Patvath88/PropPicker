@@ -90,7 +90,7 @@ st.markdown(f"### Players with {prop} ≥ {line} and confidence ≥ {min_conf}%"
 if filtered.empty:
     st.info("No players meet the criteria.")
 else:
-    # Use columns to create cards
+    # Use columns to create cards (3 per row)
     for idx in range(0, len(filtered), 3):
         cols = st.columns(3)
         for i, col in enumerate(cols):
@@ -103,7 +103,7 @@ else:
                 st.metric(label="Confidence (%)", value=player['confidence'])
                 st.markdown(f"**Avg Last 10 Games:** {player['avg_last_10']:.1f}")
                 st.markdown(f"**Hit Rate Last 10:** {player['hit_rate_last_10']:.0%}")
-                st.markdown(f"**Longest Streak:** {player['streak_count']}")
+                st.markdown(f"**Longest Streak:** {player['streak_count']} games")
                 st.markdown(f"**Total Hits:** {player['season_hit_count']}")
                 st.markdown(f"**MP Factor:** {player['mp_factor']:.2f}")
                 st.markdown(f"**Efficiency Factor:** {player['eff_factor']:.2f}")
