@@ -6,7 +6,7 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
     df: game logs with one row per game per player
     line_map: {"PTS": 25.5} etc
     upcoming_team_map: optional mapping player -> next opponent
-    def_ratings: optional mapping team -> {position -> defensive rating}
+    def_ratings: optional mapping team -> {position -> defensive rating, "overall": team defensive rating}
     """
     player_col = 'player'
     records = []
@@ -72,13 +72,14 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
 
             # Upcoming opponent defensive factor
             opp_factor = 1.0
+            opp_def_overall = None
             upcoming_opp = upcoming_team_map.get(player, None) if upcoming_team_map else None
             if upcoming_opp and def_ratings:
-                # player position
                 pos = pdf['position'].iloc[-1] if 'position' in pdf.columns else 'SG'
-                if upcoming_opp in def_ratings and pos in def_ratings[upcoming_opp]:
-                    # Lower rating = easier to score
-                    opp_factor = 1 / def_ratings[upcoming_opp][pos]
+                if upcoming_opp in def_ratings:
+                    if pos in def_ratings[upcoming_opp]:
+                        opp_factor = 1 / def_ratings[upcoming_opp][pos]
+                    opp_def_overall = def_ratings[upcoming_opp].get("overall", None)
 
             # Weighted confidence
             weighted_conf = (
@@ -110,10 +111,12 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                 "home_away_factor": home_away_factor,
                 "h2h_factor": h2h_factor,
                 "opp_factor": opp_factor,
+                "opp_def_overall": opp_def_overall,
                 "upcoming_opp": upcoming_opp,
                 "confidence": confidence,
                 "prediction": round(predicted,1),
-                "team": pdf['team'].iloc[-1] if 'team' in pdf.columns else ""
+                "team": pdf['team'].iloc[-1] if 'team' in pdf.columns else "",
+                "position": pdf['position'].iloc[-1] if 'position' in pdf.columns else 'SG'
             })
 
     return pd.DataFrame(records)
