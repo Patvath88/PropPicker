@@ -1,20 +1,23 @@
-# main.py
 import sys
 from pathlib import Path
 import streamlit as st
 import pandas as pd
-import subprocess
 import time
+import requests
 
 # ===== Add app folder to path for imports =====
-ROOT_DIR = Path(__file__).resolve().parents[1]  # proppicker/
-sys.path.append(str(ROOT_DIR / "app"))
+ROOT_DIR = Path(__file__).resolve().parent
+sys.path.append(str(ROOT_DIR))
 
 from screener import build_screener
 
 # ===== Paths =====
-CSV_FILE = ROOT_DIR / "app" / "data" / "nba_player_game_logs.csv"
-SCRAPER_FILE = ROOT_DIR / "scripts" / "scrape_nba_game_logs.py"
+CSV_FILE = ROOT_DIR / "data" / "nba_player_game_logs.csv"
+CSV_FILE.parent.mkdir(exist_ok=True)
+
+# ===== Remote CSV URL =====
+# Replace this with your hosted CSV (GitHub raw, S3, etc.)
+CSV_URL = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/app/data/nba_player_game_logs.csv"
 
 # ===== Streamlit config =====
 st.set_page_config(layout="wide", page_title="NBA Prop Screener", page_icon="ðŸ€")
@@ -22,38 +25,34 @@ st.set_page_config(layout="wide", page_title="NBA Prop Screener", page_icon="ðŸ
 # ===== Debugging paths =====
 st.write("CSV path:", CSV_FILE)
 st.write("CSV exists?", CSV_FILE.exists())
-st.write("Scraper path:", SCRAPER_FILE)
-st.write("Scraper exists?", SCRAPER_FILE.exists())
 
-# ===== Scraper helper =====
+# ===== Helper: download CSV if missing or outdated =====
 def update_csv_if_needed():
-    """Check if CSV exists or is older than 24h and run scraper if needed"""
-    need_scrape = False
+    need_download = False
     if not CSV_FILE.exists():
-        need_scrape = True
-        st.info("Game logs not found. Scraping now...")
+        need_download = True
+        st.info("Game logs not found. Downloading now...")
     else:
         modified_time = CSV_FILE.stat().st_mtime
         if (time.time() - modified_time) > 86400:  # older than 24h
-            need_scrape = True
-            st.info("Game logs are outdated. Updating now...")
+            need_download = True
+            st.info("Game logs are outdated. Downloading latest...")
 
-    if need_scrape:
-        if not SCRAPER_FILE.exists():
-            st.error("Scraper not found! Please make sure 'scrape_nba_game_logs.py' exists.")
-            return
+    if need_download:
         try:
-            with st.spinner("Downloading NBA game logs..."):
-                subprocess.run([sys.executable, str(SCRAPER_FILE)], check=True)
-            st.success("Game logs updated successfully!")
-        except subprocess.CalledProcessError:
-            st.error("Scraper failed! Please run manually.")
+            r = requests.get(CSV_URL)
+            r.raise_for_status()
+            with open(CSV_FILE, "wb") as f:
+                f.write(r.content)
+            st.success("Game logs downloaded successfully!")
+        except Exception as e:
+            st.error(f"Failed to download CSV: {e}")
 
 # ===== Load CSV =====
 @st.cache_data(ttl=86400)
 def load_data():
     if not CSV_FILE.exists():
-        st.warning("No game logs found. Please run scraper first.")
+        st.warning("No game logs found. Please check the CSV URL.")
         return pd.DataFrame()
     df = pd.read_csv(CSV_FILE)
     # Ensure numeric columns
