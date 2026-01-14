@@ -11,23 +11,49 @@ if str(ROOT_DIR) not in sys.path:
 # ======= Imports =======
 import streamlit as st
 import pandas as pd
-from app.screener import build_screener  # Keep your screener logic here
+from datetime import datetime
+from app.screener import build_screener  # Your existing logic
 
 # ======= Streamlit Config =======
 st.set_page_config(layout="wide")
 
-# ======= Data Loading from CSV =======
+# ======= CSV Path =======
 CSV_FILE = ROOT_DIR / "data" / "nba_player_stats.csv"
+CSV_FILE.parent.mkdir(exist_ok=True)
 
-@st.cache_data(ttl=86400)
-def load_data():
-    df = pd.read_csv(CSV_FILE)
+# ======= Function to scrape Basketball-Reference if CSV missing =======
+def scrape_bball_ref(season="2026"):
+    st.info("CSV not found. Downloading NBA player stats from Basketball-Reference...")
+    url = f"https://www.basketball-reference.com/leagues/NBA_{season}_per_game.html"
+    tables = pd.read_html(url)
+    df = tables[0]
+    df = df[df.Player != "Player"]  # remove repeated header rows
+    df.reset_index(drop=True, inplace=True)
     
-    # Ensure numeric columns are correct
-    numeric_cols = df.columns.drop(['Player', 'Pos', 'Tm', 'update_date'])
+    # Convert numeric columns
+    numeric_cols = df.columns.drop(['Player', 'Pos', 'Tm'])
     df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce')
     
-    # Optionally rename columns to match your screener
+    # Add update date
+    df['update_date'] = datetime.today().strftime('%Y-%m-%d')
+    
+    # Save CSV
+    df.to_csv(CSV_FILE, index=False)
+    st.success(f"Downloaded and saved stats to {CSV_FILE}")
+    return df
+
+# ======= Data Loading =======
+@st.cache_data(ttl=86400)
+def load_data():
+    if CSV_FILE.exists():
+        df = pd.read_csv(CSV_FILE)
+        # Ensure numeric columns are correct
+        numeric_cols = df.columns.drop(['Player', 'Pos', 'Tm', 'update_date'])
+        df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce')
+    else:
+        df = scrape_bball_ref()  # scrape if missing
+    
+    # Rename columns to match screener
     df.rename(columns={
         "Player": "player",
         "Tm": "team",
@@ -35,7 +61,7 @@ def load_data():
         "REB": "reb",
         "AST": "ast",
         "3P": "3pm",
-        # Add any others needed by your screener
+        # Add others if needed by build_screener
     }, inplace=True)
     
     return df
