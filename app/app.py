@@ -1,3 +1,5 @@
+# app.py
+
 # ======= Path Patch =======
 import sys
 from pathlib import Path
@@ -8,21 +10,40 @@ if str(ROOT_DIR) not in sys.path:
 
 # ======= Imports =======
 import streamlit as st
-from data.nba_loader import load_all_player_games
-from app.screener import build_screener
+import pandas as pd
+from app.screener import build_screener  # Keep your screener logic here
 
 # ======= Streamlit Config =======
 st.set_page_config(layout="wide")
 
-# ======= Data Loading =======
+# ======= Data Loading from CSV =======
+CSV_FILE = ROOT_DIR / "data" / "nba_player_stats.csv"
+
 @st.cache_data(ttl=86400)
 def load_data():
-    return load_all_player_games()
+    df = pd.read_csv(CSV_FILE)
+    
+    # Ensure numeric columns are correct
+    numeric_cols = df.columns.drop(['Player', 'Pos', 'Tm', 'update_date'])
+    df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce')
+    
+    # Optionally rename columns to match your screener
+    df.rename(columns={
+        "Player": "player",
+        "Tm": "team",
+        "PTS": "pts",
+        "REB": "reb",
+        "AST": "ast",
+        "3P": "3pm",
+        # Add any others needed by your screener
+    }, inplace=True)
+    
+    return df
 
 df = load_data()
 
 # ======= UI =======
-st.title("NBA Prop Screener")
+st.title("NBA Prop Screener (Basketball-Reference)")
 
 prop = st.selectbox("Prop Type", ["PTS", "REB", "AST", "3PM", "PRA", "PR", "PA", "RA"])
 line = st.number_input("Prop Line", value=20.5)
