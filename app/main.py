@@ -86,7 +86,17 @@ if screener.empty:
     st.info("No players meet criteria.")
     st.stop()
 
+# ===== Filter by prop and confidence =====
 filtered = screener[(screener["prop_type"]==prop) & (screener["confidence"]>=min_conf)].sort_values("confidence",ascending=False)
+
+# ===== Player Search =====
+search_name = st.text_input("Search Player by Name", "")
+if search_name.strip():
+    filtered = filtered[filtered['player'].str.contains(search_name.strip(), case=False, na=False)]
+
+if filtered.empty:
+    st.info("No players match your search criteria.")
+    st.stop()
 
 st.markdown(f"### Players with {prop} ≥ {line} and confidence ≥ {min_conf}%")
 
