@@ -1,10 +1,10 @@
 # screener.py
 import pandas as pd
+import numpy as np
 
 def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = None, debug: bool = False) -> pd.DataFrame:
     """
     Build a fully featured NBA prop screener using all relevant stats.
-
     Returns:
         DataFrame with detailed stats and confidence rating
     """
@@ -28,29 +28,26 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
             # Numeric
             pdf[col_name] = pd.to_numeric(pdf[col_name], errors='coerce')
             last_10 = pdf[col_name].tail(10).dropna().tolist()
-            full_season = pdf[col_name].dropna().tolist()
+            full_season = pdf[col_name].dropna()
 
             # Core metrics
             avg_last_10 = sum(last_10)/len(last_10) if last_10 else 0
             hit_rate_last_10 = sum(1 for x in last_10 if x >= line)/len(last_10) if last_10 else 0
 
-            # Streak
-            streak_count = 0
-            for val in reversed(full_season):
-                if val >= line:
-                    streak_count += 1
-                else:
-                    break
-
-            # Season hit count
-            season_hit_count = sum(1 for val in full_season if val >= line)
+            # --- Streak calculations ---
+            hits = full_season >= line
+            # Longest consecutive streak
+            streak_count = hits.groupby((hits != hits.shift()).cumsum()).sum().max()
+            streak_count = int(streak_count) if not pd.isna(streak_count) else 0
+            # Total games hitting the line
+            season_hit_count = int(hits.sum())
 
             # Minutes adjustment
             mp_factor = 1.0
             if 'mp' in pdf.columns:
                 mp_last_10 = pd.to_numeric(pdf['mp'].tail(10).dropna(), errors='coerce')
                 if len(mp_last_10):
-                    mp_factor = min(sum(mp_last_10)/len(mp_last_10)/30, 1.0)  # assume 30min avg baseline
+                    mp_factor = min(sum(mp_last_10)/len(mp_last_10)/30, 1.0)  # baseline 30min
 
             # Efficiency adjustment (FG% and TO)
             eff_factor = 1.0
@@ -87,12 +84,11 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                 eff_factor * 0.1 +
                 home_away_factor * 0.1 +
                 h2h_factor * 0.1 +
-                min(streak_count/5,1.0) * 0.05  # cap streak factor at 5 games
+                min(streak_count/5,1.0) * 0.05  # streak factor
             )
             weighted_conf = min(max(weighted_conf,0),1)
             confidence = round(weighted_conf*100)
 
-            # Debug
             if debug:
                 print(f"{player} | {prop} | line {line} | confidence {confidence}%")
                 print({
@@ -107,7 +103,6 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
                 })
                 print('-'*40)
 
-            # Store record
             records.append({
                 "player": player,
                 "prop_type": prop,
