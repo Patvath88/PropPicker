@@ -1,40 +1,43 @@
+# screener.py
+
 import pandas as pd
-from data.metrics import compute_prop_metrics
-from data.confidence import confidence_score
 
-def build_screener(df, line_map):
-    screener_rows = []
+def build_screener(df: pd.DataFrame, line_map: dict) -> pd.DataFrame:
+    # Auto-detect player column
+    possible_player_cols = ['player', 'PLAYER_NAME', 'Player', 'NAME']
+    player_col = next((c for c in possible_player_cols if c in df.columns), None)
+    
+    if not player_col:
+        raise ValueError("No player column found in the DataFrame")
 
-    for player, pdf in df.groupby("PLAYER_NAME"):
-        metrics = compute_prop_metrics(pdf)
+    records = []
+    for player, pdf in df.groupby(player_col):
+        for prop, line in line_map.items():
+            # Map prop names to your column names if needed
+            col_map = {
+                "PTS": "pts",
+                "REB": "reb",
+                "AST": "ast",
+                "3PM": "3pm"
+            }
+            col_name = col_map.get(prop, prop)
 
-        for _, m in metrics.iterrows():
-            line = line_map.get(m["prop_type"], None)
-            if line is None:
+            if col_name not in pdf.columns:
                 continue
 
-            vals = pdf.head(10)
-            prop_vals = (
-                vals["PTS"] if m["prop_type"] == "PTS" else
-                vals["PTS"] + vals["REB"] + vals["AST"]
-            )
+            last_10 = pdf[col_name].tail(10)
+            avg_last_10 = last_10.mean()
+            hit_rate_last_10 = (last_10 >= line).mean()
+            confidence = int(hit_rate_last_10 * 100)
 
-            hit_rate = (prop_vals > line).mean()
-
-            row = {
+            records.append({
                 "player": player,
-                "prop_type": m["prop_type"],
+                "prop_type": prop,
                 "line": line,
-                "avg_last_10": m["avg_last_10"],
-                "hit_rate_last_10": hit_rate,
-                "minutes_avg_last_5": m["minutes_avg_last_5"],
-                "confidence": confidence_score({
-                    **m,
-                    "hit_rate_last_10": hit_rate,
-                    "home_away_delta": 0  # placeholder
-                }, line)
-            }
+                "avg_last_10": avg_last_10,
+                "hit_rate_last_10": hit_rate_last_10,
+                "confidence": confidence
+            })
 
-            screener_rows.append(row)
+    return pd.DataFrame(records)
 
-    return pd.DataFrame(screener_rows)
