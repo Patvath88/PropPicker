@@ -7,18 +7,23 @@ import subprocess
 import time
 
 # ===== Add app folder to path for imports =====
-ROOT_DIR = Path(__file__).resolve().parent
-sys.path.append(str(ROOT_DIR))
+ROOT_DIR = Path(__file__).resolve().parents[1]  # proppicker/
+sys.path.append(str(ROOT_DIR / "app"))
 
 from screener import build_screener
 
 # ===== Paths =====
-CSV_FILE = ROOT_DIR / "data" / "nba_player_game_logs.csv"
-CSV_FILE.parent.mkdir(exist_ok=True)
-SCRAPER_FILE = ROOT_DIR.parent / "scripts" / "scrape_nba_game_logs.py"
+CSV_FILE = ROOT_DIR / "app" / "data" / "nba_player_game_logs.csv"
+SCRAPER_FILE = ROOT_DIR / "scripts" / "scrape_nba_game_logs.py"
 
 # ===== Streamlit config =====
 st.set_page_config(layout="wide", page_title="NBA Prop Screener", page_icon="🏀")
+
+# ===== Debugging paths =====
+st.write("CSV path:", CSV_FILE)
+st.write("CSV exists?", CSV_FILE.exists())
+st.write("Scraper path:", SCRAPER_FILE)
+st.write("Scraper exists?", SCRAPER_FILE.exists())
 
 # ===== Scraper helper =====
 def update_csv_if_needed():
@@ -34,6 +39,9 @@ def update_csv_if_needed():
             st.info("Game logs are outdated. Updating now...")
 
     if need_scrape:
+        if not SCRAPER_FILE.exists():
+            st.error("Scraper not found! Please make sure 'scrape_nba_game_logs.py' exists.")
+            return
         try:
             with st.spinner("Downloading NBA game logs..."):
                 subprocess.run([sys.executable, str(SCRAPER_FILE)], check=True)
