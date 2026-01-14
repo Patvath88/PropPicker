@@ -16,6 +16,11 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
     line_map: {"PTS": 25.5} etc
     upcoming_team_map: optional H2H mapping
     """
+    # Normalize column names
+    df = df.rename(columns=lambda x: x.strip().lower())
+    if 'player' not in df.columns:
+        raise ValueError("CSV must have a 'player' column")
+
     player_col = 'player'
     records = []
 
@@ -25,9 +30,11 @@ def build_screener(df: pd.DataFrame, line_map: dict, upcoming_team_map: dict = N
             col_map = {"PTS":"pts","REB":"reb","AST":"ast","3PM":"3pm"}
             col_name = col_map.get(prop, prop.lower())
             if col_name not in pdf.columns:
+                if debug:
+                    print(f"Skipping {prop} for {player}, missing column {col_name}")
                 continue
 
-            # Numeric conversion
+            # Ensure numeric
             pdf[col_name] = pd.to_numeric(pdf[col_name], errors='coerce')
             last_10 = pdf[col_name].tail(10).dropna().tolist()
             full_season = pdf[col_name].dropna().tolist()
